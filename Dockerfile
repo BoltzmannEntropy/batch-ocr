@@ -32,6 +32,7 @@ RUN pip install \
     opencv-python-headless \
     pillow \
     addict \
-    frontend
+    frontend \ 
+    paddlex[ocr]
 
 # /root/.paddlex/official_models/PP-OCRv5_server_det

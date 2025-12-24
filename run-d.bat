@@ -7,6 +7,7 @@ docker run --gpus all --rm -it ^
     --ulimit memlock=-1 ^
     --ulimit stack=67108864 ^
     -p 7888:7888 ^
+    -p 7889:7889 ^
     -v "%cd%":/workspace ^
     -v "%USERPROFILE%/.cache":/root/.cache ^
     batch-ocr:latest ^

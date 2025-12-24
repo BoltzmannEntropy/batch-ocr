@@ -382,4 +382,4 @@ with gr.Blocks(title="PP-StructureV3 Document Parser + Batch OCR") as app:
 
 if __name__ == "__main__":
     print("Starting PP-StructureV3 Document Parser + Batch OCR UI...")
-    app.launch(server_name="0.0.0.0", server_port=7889)
+    app.launch(server_name="0.0.0.0", server_port=7888)
