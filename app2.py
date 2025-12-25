@@ -6,8 +6,9 @@ from PIL import Image
 import tempfile
 import traceback
 import numpy as np
+import platform
 
-from paddleocr import PaddleOCR, PPStructureV3
+from paddleocr import PaddleOCR
 import paddle
 
 
@@ -29,12 +30,20 @@ def initialize_pipelines(
     """Initialize PaddleOCR (text) and PP-StructureV3 (document parsing)."""
     global ocr_instance, doc_pipeline
 
-    if use_gpu:
-        if not paddle.is_compiled_with_cuda():
-            raise RuntimeError("PaddlePaddle CUDA support is required for GPU mode.")
+    is_macos = platform.system().lower() == "darwin"
+    requested_gpu = bool(use_gpu)
+
+    # Auto-disable GPU on macOS (CUDA unsupported)
+    if is_macos and requested_gpu:
+        print("macOS detected; CUDA is not available. Forcing CPU mode.")
+        requested_gpu = False
+
+    if requested_gpu and paddle.is_compiled_with_cuda():
         paddle.set_device("gpu")
         device = paddle.get_device()
     else:
+        if requested_gpu and not paddle.is_compiled_with_cuda():
+            print("CUDA not available in this Paddle build. Falling back to CPU.")
         paddle.set_device("cpu")
         device = "cpu"
 
@@ -46,13 +55,23 @@ def initialize_pipelines(
         lang=lang,
     )
 
+    # Lazy import to avoid hard dependency at module import time
+    try:
+        from paddleocr import PPStructureV3  # type: ignore
+    except Exception as e:
+        raise RuntimeError(
+            "PPStructureV3 is unavailable. Upgrade your environment: '\n"
+            "  pip install --upgrade paddleocr paddlex\n"
+            "(Note: macOS runs CPU-only.)"
+        ) from e
+
     # Document structure pipeline
     doc_pipeline = PPStructureV3(
         use_doc_orientation_classify=use_orientation,
         use_doc_unwarping=use_unwarp,
         use_textline_orientation=use_textline,
         use_chart_recognition=use_chart,
-        device="gpu" if use_gpu else "cpu",
+        device="gpu" if (device != "cpu") else "cpu",
     )
 
     return f"Pipelines initialized (Device: {device}, Lang: {lang})"
@@ -298,7 +317,8 @@ with gr.Blocks(title="PP-StructureV3 Document Parser + Batch OCR") as app:
 
     with gr.Row():
         folder_input = gr.Textbox(label="Root PDF Folder", value="/workspace")
-        use_gpu_checkbox = gr.Checkbox(label="Use GPU", value=True)
+        default_use_gpu = platform.system().lower() != "darwin"
+        use_gpu_checkbox = gr.Checkbox(label="Use GPU", value=default_use_gpu)
         lang_dd = gr.Dropdown(
             label="Language",
             choices=[

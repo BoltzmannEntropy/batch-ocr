@@ -6,6 +6,7 @@ from PIL import Image
 import tempfile
 import traceback
 import numpy as np
+import platform
 
 from paddleocr import PaddleOCR
 import paddle
@@ -17,17 +18,29 @@ ocr_instance = None
 
 
 def initialize_ocr(use_gpu=True):
-    """Initialize PaddleOCR with stable classic OCR (no doc pipeline)"""
+    """Initialize PaddleOCR with stable classic OCR (no doc pipeline).
+
+    - On macOS (Darwin), GPU is not supported; force CPU.
+    - If GPU is requested but CUDA is unavailable, gracefully fall back to CPU.
+    """
     global ocr_instance
 
-    print(f"Initializing PaddleOCR | GPU requested: {use_gpu}")
+    is_macos = platform.system().lower() == "darwin"
+    requested_gpu = bool(use_gpu)
 
-    if use_gpu:
-        if not paddle.is_compiled_with_cuda():
-            raise RuntimeError("PaddlePaddle CUDA support is required for GPU mode.")
+    # Auto-disable GPU on macOS
+    if is_macos and requested_gpu:
+        print("macOS detected; CUDA is not available. Forcing CPU mode.")
+        requested_gpu = False
+
+    print(f"Initializing PaddleOCR | GPU requested: {use_gpu} | macOS: {is_macos}")
+
+    if requested_gpu and paddle.is_compiled_with_cuda():
         paddle.set_device("gpu")
         device = paddle.get_device()
     else:
+        if requested_gpu and not paddle.is_compiled_with_cuda():
+            print("CUDA not available in this Paddle build. Falling back to CPU.")
         paddle.set_device("cpu")
         device = "cpu"
 
@@ -35,7 +48,7 @@ def initialize_ocr(use_gpu=True):
         use_doc_orientation_classify=False,
         use_doc_unwarping=False,
         use_textline_orientation=False,
-        lang="en"
+        lang="en",
     )
 
     return f"PaddleOCR initialized successfully (Device: {device})"
@@ -211,10 +224,12 @@ with gr.Blocks(title="PDF OCR with PaddleOCR") as app:
 
     folder_input = gr.Textbox(
         label="Root PDF Folder",
-        value="/workspace"
+        value="/workspace",
     )
 
-    use_gpu_checkbox = gr.Checkbox(label="Use GPU", value=True)
+    # Default GPU checkbox based on OS (off on macOS)
+    default_use_gpu = platform.system().lower() != "darwin"
+    use_gpu_checkbox = gr.Checkbox(label="Use GPU", value=default_use_gpu)
 
     init_btn = gr.Button("Initialize OCR")
     init_output = gr.Textbox()

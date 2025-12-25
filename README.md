@@ -7,11 +7,6 @@
 
 I created Batch OCR to process hundreds and thousands of PDF files into text files using a very efficient model. I tested almost everything available on Hugging Face and finally chose PaddleOCR for its speed and accuracy. The Gradio app lets you select a folder and recursively process all PDFs into text for indexing or LLM training, etc.
 
-<div align="center">
-  <img src="assets/01.png" alt="Batch OCR Features" width="600"/>
-  <br>
-</div>
-
 This project packages a fast, reliable PDF-to-text pipeline using PaddleOCR. It scans a folder recursively, extracts embedded text when available, falls back to OCR when needed, filters low-quality text, and writes clean `.txt` files while mirroring the original folder structure under `ocr_results`.
 
 The app runs inside Docker on Windows or Linux and can use either GPU (recommended) or CPU.
@@ -60,7 +55,7 @@ sh run.sh
 - GPU or CPU mode selectable from the UI
 
 <div align="center">
-  <img src="assets/03.png" alt="Batch OCR Features" width="600"/>
+  <img src="assets/01.png" alt="Batch OCR Features" width="600"/>
   <br>
 </div>
 
@@ -166,6 +161,31 @@ Outputs are written to `/workspace/ocr_results`, preserving the subfolder struct
   - Structured outputs to `doc_results/<pdf-name>/` per PDF
 
 Note: PP-Structure is heavier than plain OCR; on CPU (macOS), expect slower processing.
+
+## Headless CLI (no UI)
+
+Run batch OCR from the terminal using the CLI script. This works with either the classic OCR pipeline or the PP-Structure pipeline, and respects macOS CPU defaults.
+
+```sh
+# Classic OCR (app.py pipeline)
+source batch-ocr/.venv/bin/activate   # if using macOS native setup
+python batch-ocr/ocr_cli.py --mode classic --root /path/to/pdfs
+
+# Structure + OCR (app2.py pipeline)
+python batch-ocr/ocr_cli.py \
+  --mode structure \
+  --root /path/to/pdfs \
+  --lang en \
+  --render-scale 2.0 \
+  --export-txt --export-json --export-md \
+  --force-ocr           # optional
+
+# GPU toggle (defaults to off on macOS, on elsewhere)
+python batch-ocr/ocr_cli.py --mode classic --root /path/to/pdfs --no-gpu
+python batch-ocr/ocr_cli.py --mode structure --root /path/to/pdfs --use-gpu
+```
+
+Outputs are written under `ocr_results/` (and `doc_results/` for structure mode). A `_batch_summary.txt` is saved in the text output root.
 
 ## Ports and Volumes
 
