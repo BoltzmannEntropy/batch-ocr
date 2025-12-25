@@ -7,6 +7,11 @@
 
 I created Batch OCR to process hundreds and thousands of PDF files into text files using a very efficient model. I tested almost everything available on Hugging Face and finally chose PaddleOCR for its speed and accuracy. The Gradio app lets you select a folder and recursively process all PDFs into text for indexing or LLM training, etc.
 
+<div align="center">
+  <img src="assets/01.png" alt="Batch OCR Features" width="600"/>
+  <br>
+</div>
+
 This project packages a fast, reliable PDF-to-text pipeline using PaddleOCR. It scans a folder recursively, extracts embedded text when available, falls back to OCR when needed, filters low-quality text, and writes clean `.txt` files while mirroring the original folder structure under `ocr_results`.
 
 The app runs inside Docker on Windows or Linux and can use either GPU (recommended) or CPU.
@@ -55,7 +60,7 @@ sh run.sh
 - GPU or CPU mode selectable from the UI
 
 <div align="center">
-  <img src="assets/01.png" alt="Batch OCR Features" width="600"/>
+  <img src="assets/03.png" alt="Batch OCR Features" width="600"/>
   <br>
 </div>
 
