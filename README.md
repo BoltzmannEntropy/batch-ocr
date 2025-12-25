@@ -93,7 +93,7 @@ Use the included script:
 
 This starts the container and launches the Gradio app. It maps your current folder to `/workspace` inside the container and exposes the UI at `http://localhost:7888`.
 
-### Linux/macOS (sh)
+### Linux/macOS (Docker)
 
 Use the included script:
 
@@ -102,6 +102,37 @@ sh run.sh
 ```
 
 This runs the container with GPU (if available), maps the current folder to `/workspace`, and starts the app. The UI is available at `http://localhost:7888`.
+
+### macOS (native, CPU-only)
+
+If you prefer running outside Docker on macOS (CPU-only), use the helper script which creates a venv, installs dependencies, and runs a quick OCR smoke test:
+
+```sh
+bash batch-ocr/osx_setup_run_test.sh
+```
+
+To launch the classic batch OCR UI (`app.py`) after setup:
+
+```sh
+source batch-ocr/.venv/bin/activate
+python batch-ocr/app.py
+# Open http://127.0.0.1:7888 and uncheck "Use GPU" in the UI
+```
+
+To launch the PP-Structure + OCR UI (`app2.py`) after setup:
+
+```sh
+source batch-ocr/.venv/bin/activate
+python batch-ocr/app2.py
+# Open http://127.0.0.1:7888 and uncheck "Use GPU" in the UI
+```
+
+If you see an `ImportError` for `PPStructureV3` when running `app2.py`, upgrade document components in the venv:
+
+```sh
+source batch-ocr/.venv/bin/activate
+pip install --upgrade paddleocr paddlex
+```
 
 <div align="center">
   <img src="assets/02.png" alt="Batch OCR UI" width="600"/>
@@ -117,6 +148,19 @@ This runs the container with GPU (if available), maps the current folder to `/wo
 5. Click “OCR All PDFs” to process all PDFs recursively.
 
 Outputs are written to `/workspace/ocr_results`, preserving the subfolder structure. Each PDF produces a matching `_ocr.txt` file. Errors (if any) are written as `_ERROR.txt` in the same mirrored folder.
+
+### Using app2.py (PP-Structure + OCR)
+
+`app2.py` adds PP-StructureV3 for document parsing (tables, layout), alongside OCR:
+
+- Choose language and structure options (orientation, unwarp, textline, charts).
+- Choose exports: plain text, JSON, Markdown.
+- Adjust render scale (PDF → image) for quality/speed tradeoffs.
+- Batch run writes:
+  - Text files to `ocr_results/` (mirroring input tree)
+  - Structured outputs to `doc_results/<pdf-name>/` per PDF
+
+Note: PP-Structure is heavier than plain OCR; on CPU (macOS), expect slower processing.
 
 ## Ports and Volumes
 
@@ -149,9 +193,11 @@ Everything under your current host directory is available inside the container a
 ## Project Layout
 
 - `app.py` — Gradio app and OCR pipeline using PaddleOCR and PyMuPDF
+- `app2.py` — Advanced UI with PP-StructureV3 document parsing (JSON/Markdown) + batch OCR
 - `Dockerfile` — Base image with PaddleOCR and required libraries
 - `run-d.bat` — Windows script to run the container and start the app
 - `run.sh` — Linux/macOS script to run the container and start the app
+- `osx_setup_run_test.sh` — macOS native setup + smoke test (creates `.venv`, installs CPU deps)
 - `assets/` — Optional images and logo files
 
 ## Troubleshooting
@@ -159,6 +205,7 @@ Everything under your current host directory is available inside the container a
 - GPU not available:
   - Error: `PaddlePaddle CUDA support is required for GPU mode.`
   - Fix: Uncheck “Use GPU” in the UI, or install NVIDIA drivers + NVIDIA Container Toolkit on the host.
+  - macOS note: GPU (CUDA) is not supported; run CPU and uncheck “Use GPU”.
 - No PDFs found:
   - Ensure the path is inside `/workspace` and contains `.pdf` files; use “List PDFs” to verify discovery.
 - Permission denied on output:
@@ -167,6 +214,14 @@ Everything under your current host directory is available inside the container a
   - Use GPU mode if available. For large batches, consider reducing image render scale in `app.py` (search for `fitz.Matrix(2, 2)` and adjust to `(1, 1)` to trade accuracy for speed).
 - Output quality is inconsistent:
   - Tweak heuristics in `app.py` (`is_readable_text`) to relax/tighten filters.
+
+### macOS dependency notes
+
+- The `batch-ocr/osx_setup_run_test.sh` script pins versions known to work on macOS CPU:
+  - `paddleocr==2.7.3` (legacy `.ocr()` result shape used by the apps)
+  - `numpy<2` (for OpenCV compatibility with PaddleOCR 2.7.x)
+  - `huggingface_hub<1.0` (required by the current Gradio import path)
+- First run downloads OCR models to `~/.paddleocr` and `~/.paddlex`.
 
 ## License
 
