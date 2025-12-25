@@ -3,19 +3,20 @@
   <br>
 </div>
 
-# Batch OCR (PaddleOCR) in Docker
+# Batch OCR (PaddleOCR) — Docker + macOS Native
 
 I created Batch OCR to process hundreds and thousands of PDF files into text files using a very efficient model. I tested almost everything available on Hugging Face and finally chose PaddleOCR for its speed and accuracy. The Gradio app lets you select a folder and recursively process all PDFs into text for indexing or LLM training, etc.
 
 This project packages a fast, reliable PDF-to-text pipeline using PaddleOCR. It scans a folder recursively, extracts embedded text when available, falls back to OCR when needed, filters low-quality text, and writes clean `.txt` files while mirroring the original folder structure under `ocr_results`.
 
-The app runs inside Docker on Windows or Linux and can use either GPU (recommended) or CPU.
+Run it via Docker on Windows, Linux, and macOS (CPU-only on macOS), or natively on macOS (CPU). GPU acceleration is available on Windows/Linux with NVIDIA CUDA; macOS is CPU-only.
 
 <div align="center">
 
 [![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)](https://docker.com)
 [![Windows](https://img.shields.io/badge/Windows-0078D4?style=for-the-badge&logo=windows&logoColor=white)](https://learn.microsoft.com/windows)
 [![Linux](https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black)](https://linux.org)
+[![macOS](https://img.shields.io/badge/macOS-000000?style=for-the-badge&logo=apple&logoColor=white)](https://www.apple.com/macos)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge&logo=python)](https://python.org)
 [![PaddleOCR](https://img.shields.io/badge/PaddleOCR-Enabled-green?style=for-the-badge)](https://github.com/PaddlePaddle/PaddleOCR)
 
@@ -62,16 +63,16 @@ sh run.sh
 ## System Requirements
 
 - Docker 24+
-- Windows 11 or Linux (Ubuntu/Debian recommended)
-- Optional GPU acceleration:
+- Windows 11, Linux (Ubuntu/Debian recommended), or macOS 12+ (Intel/Apple Silicon)
+- Optional GPU acceleration (Windows/Linux only):
   - NVIDIA GPU + drivers on host
   - NVIDIA Container Toolkit (nvidia-docker2)
 
 ## Requirements
 
 - Docker 24+
-- For GPU acceleration: NVIDIA driver and NVIDIA Container Toolkit (nvidia-docker2)
-- For CPU-only runs: no GPU requirements
+- For GPU acceleration (Windows/Linux): NVIDIA driver and NVIDIA Container Toolkit (nvidia-docker2)
+- For CPU-only runs: no GPU requirements (macOS is CPU-only)
 
 ## Build
 
