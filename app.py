@@ -105,7 +105,14 @@ def is_readable_text(text):
 # ==============================
 # OCR Single PDF
 # ==============================
-def ocr_pdf_file(pdf_path, progress=gr.Progress(), force_ocr: bool = False, min_embedded_chars: int = 300):
+def ocr_pdf_file(
+    pdf_path,
+    progress=gr.Progress(),
+    force_ocr: bool = False,
+    min_embedded_chars: int = 300,
+    image_coverage_threshold: float = 0.5,
+    text_coverage_threshold: float = 0.05,
+):
     global ocr_instance
     pdf_name = Path(pdf_path).name
 
@@ -125,8 +132,37 @@ def ocr_pdf_file(pdf_path, progress=gr.Progress(), force_ocr: bool = False, min_
 
             page = doc[page_num]
             embedded = page.get_text().strip()
+            # Compute rough content coverage using text dict blocks
+            try:
+                info = page.get_text("dict")
+                blocks = info.get("blocks", []) if isinstance(info, dict) else []
+            except Exception:
+                blocks = []
+            pr = page.rect
+            page_area = max(1.0, pr.width * pr.height)
+            img_area = 0.0
+            txt_area = 0.0
+            for b in blocks:
+                bbox = b.get("bbox") if isinstance(b, dict) else None
+                if not bbox or len(bbox) != 4:
+                    continue
+                x0, y0, x1, y1 = bbox
+                area = max(0.0, (x1 - x0) * (y1 - y0))
+                if b.get("type") == 1:  # image block
+                    img_area += area
+                elif b.get("type") == 0:  # text block
+                    txt_area += area
+            img_cov = img_area / page_area
+            txt_cov = txt_area / page_area
 
-            if not force_ocr and embedded and len(embedded) >= min_embedded_chars and is_readable_text(embedded):
+            # Smart decision: trust embedded text only if sizable and readable, and page is not dominated by images
+            if (
+                not force_ocr
+                and embedded
+                and len(embedded) >= min_embedded_chars
+                and is_readable_text(embedded)
+                and img_cov < image_coverage_threshold
+            ):
                 # Accept embedded text only if it is long enough and passes readability
                 all_text.append(embedded)
                 page_results.append({"page": page_num + 1, "method": "embedded"})
@@ -156,7 +192,12 @@ def ocr_pdf_file(pdf_path, progress=gr.Progress(), force_ocr: bool = False, min_
                     all_text.append("\n".join(page_text))
                     page_results.append({"page": page_num + 1, "method": "ocr"})
                 else:
-                    page_results.append({"page": page_num + 1, "method": "ocr_empty"})
+                    # If OCR produced nothing, but embedded text coverage seems legitimate, fall back to embedded
+                    if embedded and is_readable_text(embedded) and txt_cov >= text_coverage_threshold:
+                        all_text.append(embedded)
+                        page_results.append({"page": page_num + 1, "method": "embedded_fallback"})
+                    else:
+                        page_results.append({"page": page_num + 1, "method": "ocr_empty"})
 
             except Exception as e:
                 page_results.append({"page": page_num + 1, "method": "error", "error": str(e)})
@@ -242,31 +283,52 @@ def ocr_all_pdfs(folder_path, use_gpu, progress=gr.Progress(), force_ocr: bool =
 # ==============================
 # Gradio UI
 # ==============================
+def _run_ocr_ui(folder_path, use_gpu, force_ocr_opt, min_chars_opt):
+    # Wrapper to keep Gradio params simple and preserve internal progress default
+    return ocr_all_pdfs(
+        folder_path,
+        use_gpu,
+        force_ocr=bool(force_ocr_opt),
+        min_embedded_chars=int(min_chars_opt),
+    )
+
 with gr.Blocks(title="PDF OCR with PaddleOCR") as app:
     gr.Markdown("# Recursive Batch PDF OCR (PaddleOCR)")
 
-    folder_input = gr.Textbox(
-        label="Root PDF Folder",
-        value="/workspace",
-    )
+    with gr.Row():
+        folder_input = gr.Textbox(
+            label="Root PDF Folder",
+            value="/workspace",
+            scale=3,
+        )
+        # Default GPU checkbox based on OS (off on macOS)
+        default_use_gpu = platform.system().lower() != "darwin"
+        use_gpu_checkbox = gr.Checkbox(label="Use GPU", value=default_use_gpu)
 
-    # Default GPU checkbox based on OS (off on macOS)
-    default_use_gpu = platform.system().lower() != "darwin"
-    use_gpu_checkbox = gr.Checkbox(label="Use GPU", value=default_use_gpu)
+    with gr.Row():
+        force_checkbox = gr.Checkbox(label="Force OCR (ignore embedded text)", value=False)
+        min_chars_slider = gr.Slider(
+            minimum=100, maximum=2000, step=50, value=500,
+            label="Min embedded characters to trust embedded text"
+        )
 
-    init_btn = gr.Button("Initialize OCR")
-    init_output = gr.Textbox()
+    with gr.Row():
+        init_btn = gr.Button("Initialize OCR")
+        list_btn = gr.Button("List PDFs")
+        run_btn = gr.Button("OCR All PDFs")
 
-    list_btn = gr.Button("List PDFs")
-    list_output = gr.Textbox(lines=8)
-
-    run_btn = gr.Button("OCR All PDFs")
-    results_output = gr.Textbox(lines=12)
-    output_folder = gr.Textbox()
+    init_output = gr.Textbox(label="Init Output")
+    list_output = gr.Textbox(lines=8, label="Detected PDFs")
+    results_output = gr.Textbox(lines=12, label="Summary")
+    output_folder = gr.Textbox(label="Text output root")
 
     init_btn.click(initialize_ocr, use_gpu_checkbox, init_output)
     list_btn.click(lambda p: list_pdf_files(p)[0], folder_input, list_output)
-    run_btn.click(ocr_all_pdfs, [folder_input, use_gpu_checkbox], [results_output, output_folder])
+    run_btn.click(
+        _run_ocr_ui,
+        [folder_input, use_gpu_checkbox, force_checkbox, min_chars_slider],
+        [results_output, output_folder]
+    )
 
 
 if __name__ == "__main__":
