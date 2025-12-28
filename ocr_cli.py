@@ -20,14 +20,16 @@ class DummyProgress:
         pass
 
 
-def run_classic(root: Path, use_gpu: bool):
+def run_classic(root: Path, use_gpu: bool, force_ocr: bool, min_embedded_chars: int):
     app_py = Path(__file__).resolve().parent / 'app.py'
     mod = load_module(app_py, 'batch_ocr_app')
 
     print(f"Initializing OCR (classic) | use_gpu={use_gpu}")
     print(mod.initialize_ocr(use_gpu=use_gpu))
 
-    summary, out_root = mod.ocr_all_pdfs(str(root), use_gpu=use_gpu, progress=DummyProgress())
+    summary, out_root = mod.ocr_all_pdfs(
+        str(root), use_gpu=use_gpu, progress=DummyProgress(), force_ocr=force_ocr, min_embedded_chars=min_embedded_chars
+    )
     print(summary)
 
     out_dir = Path(out_root)
@@ -104,6 +106,10 @@ def main(argv=None):
     g.add_argument('--no-gpu', dest='use_gpu', action='store_false', help='Disable GPU (CPU only)')
     parser.set_defaults(use_gpu=default_use_gpu)
 
+    # Shared options
+    parser.add_argument('--force-ocr', action='store_true', default=False, help='Ignore embedded text and force OCR')
+    parser.add_argument('--min-embedded-chars', type=int, default=300, help='Min chars/page to trust embedded text')
+
     # Structure-specific options
     parser.add_argument('--lang', default='en', help='Language code for OCR (structure mode)')
     parser.add_argument('--orientation', dest='use_orientation', action='store_true', default=True)
@@ -114,7 +120,7 @@ def main(argv=None):
     parser.add_argument('--no-textline', dest='use_textline', action='store_false')
     parser.add_argument('--chart', dest='use_chart', action='store_true', default=False)
     parser.add_argument('--no-chart', dest='use_chart', action='store_false')
-    parser.add_argument('--force-ocr', action='store_true', default=False, help='Ignore embedded text and force OCR')
+    # (force-ocr handled as shared flag)
     parser.add_argument('--render-scale', type=float, default=2.0, help='PDF render scale for structure mode')
     parser.add_argument('--export-txt', dest='export_txt', action='store_true', default=True)
     parser.add_argument('--no-export-txt', dest='export_txt', action='store_false')
@@ -129,7 +135,7 @@ def main(argv=None):
         parser.error(f'Root does not exist: {root}')
 
     if args.mode == 'classic':
-        run_classic(root, use_gpu=args.use_gpu)
+        run_classic(root, use_gpu=args.use_gpu, force_ocr=args.force_ocr, min_embedded_chars=args.min_embedded_chars)
     else:
         run_structure(
             root=root,
@@ -144,9 +150,8 @@ def main(argv=None):
             export_txt=args.export_txt,
             export_json=args.export_json,
             export_md=args.export_md,
-        )
+            )
 
 
 if __name__ == '__main__':
     main()
-

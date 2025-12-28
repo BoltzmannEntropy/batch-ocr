@@ -56,23 +56,30 @@ def initialize_pipelines(
     )
 
     # Lazy import to avoid hard dependency at module import time
+    # Try best-effort imports for structure pipeline; fall back to text-only if unavailable
+    PPStructClass = None
     try:
         from paddleocr import PPStructureV3  # type: ignore
-    except Exception as e:
-        raise RuntimeError(
-            "PPStructureV3 is unavailable. Upgrade your environment: '\n"
-            "  pip install --upgrade paddleocr paddlex\n"
-            "(Note: macOS runs CPU-only.)"
-        ) from e
+        PPStructClass = PPStructureV3
+    except Exception:
+        try:
+            from paddleocr.ppstructure import PPStructure  # type: ignore
+            PPStructClass = PPStructure
+        except Exception:
+            PPStructClass = None
 
     # Document structure pipeline
-    doc_pipeline = PPStructureV3(
-        use_doc_orientation_classify=use_orientation,
-        use_doc_unwarping=use_unwarp,
-        use_textline_orientation=use_textline,
-        use_chart_recognition=use_chart,
-        device="gpu" if (device != "cpu") else "cpu",
-    )
+    if PPStructClass is not None:
+        doc_pipeline = PPStructClass(
+            use_doc_orientation_classify=use_orientation,
+            use_doc_unwarping=use_unwarp,
+            use_textline_orientation=use_textline,
+            use_chart_recognition=use_chart,
+            device="gpu" if (device != "cpu") else "cpu",
+        )
+    else:
+        print("PP-Structure not available; proceeding with text OCR only. To enable structured outputs, install a version of paddleocr that provides PPStructure or PPStructureV3 (and paddlex).")
+        doc_pipeline = None
 
     return f"Pipelines initialized (Device: {device}, Lang: {lang})"
 
@@ -164,7 +171,7 @@ def process_pdf(
 
             try:
                 # Export structured artifacts if requested
-                if export_json or export_md:
+                if (export_json or export_md) and doc_pipeline is not None:
                     image = Image.open(img_path).convert("RGB")
                     img_np = np.array(image)
                     doc_out = doc_pipeline.predict(img_np)

@@ -7,6 +7,8 @@ import tempfile
 import traceback
 import numpy as np
 import platform
+import sys
+import logging
 
 from paddleocr import PaddleOCR
 import paddle
@@ -15,6 +17,12 @@ import paddle
 # Global OCR instance
 # ==============================
 ocr_instance = None
+
+# Reduce PaddleOCR verbosity: hide ppocr DEBUG spam
+try:
+    logging.getLogger('ppocr').setLevel(logging.WARNING)
+except Exception:
+    pass
 
 
 def initialize_ocr(use_gpu=True):
@@ -97,7 +105,7 @@ def is_readable_text(text):
 # ==============================
 # OCR Single PDF
 # ==============================
-def ocr_pdf_file(pdf_path, progress=gr.Progress()):
+def ocr_pdf_file(pdf_path, progress=gr.Progress(), force_ocr: bool = False, min_embedded_chars: int = 300):
     global ocr_instance
     pdf_name = Path(pdf_path).name
 
@@ -108,6 +116,9 @@ def ocr_pdf_file(pdf_path, progress=gr.Progress()):
         all_text = []
         page_results = []
 
+        # Log file and total pages up-front
+        print(f"[OCR] File: {pdf_name} | Pages: {total_pages}", flush=True)
+
         for page_num in range(total_pages):
             progress((page_num + 1) / total_pages,
                      desc=f"{pdf_name} | Page {page_num + 1}/{total_pages}")
@@ -115,7 +126,8 @@ def ocr_pdf_file(pdf_path, progress=gr.Progress()):
             page = doc[page_num]
             embedded = page.get_text().strip()
 
-            if embedded and len(embedded) > 50:
+            if not force_ocr and embedded and len(embedded) >= min_embedded_chars and is_readable_text(embedded):
+                # Accept embedded text only if it is long enough and passes readability
                 all_text.append(embedded)
                 page_results.append({"page": page_num + 1, "method": "embedded"})
                 continue
@@ -154,10 +166,18 @@ def ocr_pdf_file(pdf_path, progress=gr.Progress()):
 
         doc.close()
 
+        full_text = "\n\n".join(all_text)
+
+        # Completion line
+        print(
+            f"[OCR] Completed: {pdf_name} | Pages: {total_pages} | text_chars={len(full_text)}",
+            flush=True,
+        )
+
         return {
             "filename": pdf_name,
             "total_pages": total_pages,
-            "full_text": "\n\n".join(all_text),
+            "full_text": full_text,
             "pages": page_results
         }
 
@@ -172,7 +192,7 @@ def ocr_pdf_file(pdf_path, progress=gr.Progress()):
 # ==============================
 # OCR ALL PDFs (recursive + mirrored output)
 # ==============================
-def ocr_all_pdfs(folder_path, use_gpu, progress=gr.Progress()):
+def ocr_all_pdfs(folder_path, use_gpu, progress=gr.Progress(), force_ocr: bool = False, min_embedded_chars: int = 300):
     global ocr_instance
 
     if ocr_instance is None:
@@ -200,8 +220,9 @@ def ocr_all_pdfs(folder_path, use_gpu, progress=gr.Progress()):
         if out_file.exists():
             summary.append(f"SKIPPED: {rel_path}")
             continue
+        print(f"[OCR] START: {rel_path}", flush=True)
 
-        result = ocr_pdf_file(str(pdf_path), progress)
+        result = ocr_pdf_file(str(pdf_path), progress, force_ocr=force_ocr, min_embedded_chars=min_embedded_chars)
 
         if "error" in result:
             err_file.write_text(
@@ -209,9 +230,11 @@ def ocr_all_pdfs(folder_path, use_gpu, progress=gr.Progress()):
                 encoding="utf-8"
             )
             summary.append(f"ERROR: {rel_path}")
+            print(f"[OCR] ERROR: {rel_path} | {result['error']}", flush=True)
         else:
             out_file.write_text(result["full_text"], encoding="utf-8")
             summary.append(f"OK: {rel_path} ({result['total_pages']} pages)")
+            print(f"[OCR] OK: {rel_path} ({result['total_pages']} pages)", flush=True)
 
     return "\n".join(summary), str(output_root)
 
@@ -248,4 +271,5 @@ with gr.Blocks(title="PDF OCR with PaddleOCR") as app:
 
 if __name__ == "__main__":
     print("Starting PDF OCR Gradio UI...")
-    app.launch(server_name="0.0.0.0", server_port=7888)
+    port = int(os.getenv("BATCH_OCR_PORT", "7888"))
+    app.launch(server_name="0.0.0.0", server_port=port)
